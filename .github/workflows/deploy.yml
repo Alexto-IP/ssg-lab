@@ -1,0 +1,78 @@
+name: deploy-mkdocs-strict
+on:
+  push:
+    branches: [main]
+  pull_request:          # на PR только сборка, без деплоя
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Build (strict)
+        run: mkdocs build --strict
+      - name: Check control string
+        run: |
+          test -s site/index.html
+          grep -q "CONTROL_STRING_SSG_LAB" site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/upload-artifact@v4      # копия для выкладки на Helios
+        with:
+          name: site-html
+          path: site
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-helios:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      HELIOS_HOST: helios.cs.ifmo.ru
+      HELIOS_PORT: "2222"
+      SUBDIR: ssg-lab                      # итоговый URL: https://se.ifmo.ru/~sXXXXXX/ssg-lab/
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-html
+          path: site
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.HELIOS_SSH_KEY }}" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          echo "${{ secrets.HELIOS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts   # ключ хоста закреплён, проверка НЕ отключена
+      - name: Upload and switch (atomic, previous version kept)
+        run: |
+          SSH="ssh -i ~/.ssh/id_deploy -p $HELIOS_PORT ${{ secrets.HELIOS_USER }}@$HELIOS_HOST"
+          $SSH "mkdir -p public_html && rm -rf public_html/$SUBDIR.new && mkdir public_html/$SUBDIR.new"
+          tar -C site -czf - . | $SSH "tar -xzf - -C public_html/$SUBDIR.new"
+          $SSH "cd public_html && rm -rf $SUBDIR.prev; [ -d $SUBDIR ] && mv $SUBDIR $SUBDIR.prev; mv $SUBDIR.new $SUBDIR; chmod -R a+rX $SUBDIR; chmod -R go-rwx $SUBDIR.prev 2>/dev/null; true"
+      - name: Healthcheck
+        run: |
+          URL="https://se.ifmo.ru/~${{ secrets.HELIOS_USER }}/ssg-lab/"
+          test "$(curl -s -o /dev/null -w '%{http_code}' $URL)" = "200"
+          curl -s $URL | grep -q CONTROL_STRING_SSG_LAB

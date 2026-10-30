@@ -1,0 +1,65 @@
+site_name: "Результаты эксперимента: SSG stress-test"
+site_description: "Публикация результатов исследований генераторами статических сайтов"
+site_author: "Команда: Участник 1 (T1), Участник 2 (P2)"
+
+# ВАЖНО: при размещении в подкаталоге (Helios) site_url ОБЯЗАН включать подкаталог,
+# иначе все ссылки/ассеты будут абсолютными от корня и сайт «сломается».
+site_url: https://se.ifmo.ru/~s507218/ssg-lab/   # замените sXXXXXX на свой логин; для GitHub Pages: https://ЛОГИН.github.io/ssg-lab/
+use_directory_urls: true                      # красивые ЧПУ; на Helios требует включённых index-редиректов
+
+docs_dir: docs
+
+theme:
+  name: material
+  language: ru
+  features:
+    - content.action.view           # кнопка «править на GitHub»
+    - content.code.copy
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+
+  # частичное переопределение темы без форка (theme overrides)
+  custom_dir: overrides
+
+plugins:
+  - search:                        # локальный поиск (русский стемминг отключён,
+      lang: ru                      #  см. замечание в отчёте T1)
+  - bibtex:                        # BibTeX → автоматический список литературы
+      bib_file: docs/references.bib
+      csl_file: docs/style.csl     # стиль цитирования (CCSL, например гост-лайк)
+  - table-reader                   # таблицы из CSV на этапе сборки
+  - tags
+
+markdown_extensions:
+  - pymdownx.arithmatex:           # LaTeX (KaTeX локально, без внешнего CDN)
+      generic: true
+  - pymdownx.highlight:
+      linenums: true              # номера строк в листингах
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path: docs
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - footnotes                     # сноски
+  - attr_list                     # атрибуты картинок/таблицам
+  - md_in_html                    # Markdown внутри HTML (объединённые ячейки)
+  - toc:
+      permalink: true
+      slugify: !!python/name:pymdownx.slugs.uslugify
+
+extra_javascript:
+  - assets/katex/katex.min.js      # KaTeX ЛОКАЛЬНО — отображение формул при недоступности CDN
+  - assets/katex/contrib/auto-render.min.js
+  - assets/katex-init.js
+extra_css:
+  - assets/katex/katex.min.css
+  - assets/extra.css
+
+# Автонумерация уравнений — не нативная (см. отчёт P2): небольшой JS-хук
